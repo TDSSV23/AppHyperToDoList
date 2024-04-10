@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, View, TextInput, TouchableOpacity, Platform, Image } from 'react-native';
+import { DeviceMotion } from 'expo-sensors';
+import { ScrollView, StyleSheet, Text, View, TextInput, TouchableOpacity, Platform, Image, Alert } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
+
 
 export default function ToDoScreen() {
   const [tasks, setTasks] = useState([]);
@@ -15,6 +18,7 @@ export default function ToDoScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [image, setImage] = useState(null);
+  const [shakeDetected, setShakeDetected] = useState(false);
 
   const showDatePicker = () => {
     const dateToSelect = currentTask.key && taskDates[currentTask.key] ? new Date(taskDates[currentTask.key]) : selectedDate;
@@ -184,6 +188,58 @@ export default function ToDoScreen() {
     }
   };
 
+  useEffect(() => {
+    let isShakeDetected = false;
+    const subscription = DeviceMotion.addListener(({ acceleration }) => {
+      if (acceleration) {
+        const { x, y } = acceleration;
+        const threshold = 1.5;
+        if (Math.abs(x) > threshold || Math.abs(y) > threshold) {
+          if (!isShakeDetected) {
+            isShakeDetected = true;
+            _handlePressButtonAsync();
+          }
+        } else {
+          isShakeDetected = false;
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isShakeDetected = false;
+    const subscription = DeviceMotion.addListener(({ acceleration }) => {
+      if (acceleration) {
+        const { z } = acceleration;
+        const threshold = 1.5;
+        // Verifica a sacudida no eixo z
+        if (Math.abs(z) > threshold) {
+          if (!isShakeDetected) {
+            isShakeDetected = true;
+            // Adiciona uma nova tarefa com o nome "teste"
+            addTask("teste");
+            setShakeDetected(true); // Define shakeDetected como true
+            setTimeout(() => setShakeDetected(false), 3000); // Reseta shakeDetected após 3 segundos
+          }
+        } else {
+          isShakeDetected = false;
+        }
+      }
+    });
+  
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const _handlePressButtonAsync = async () => {
+    await WebBrowser.openBrowserAsync('https://catjal.github.io/site_integrantes/');
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>TODO LIST</Text>
@@ -223,7 +279,7 @@ export default function ToDoScreen() {
 
         ))}
       </ScrollView>
-
+      <TouchableOpacity onPress={_handlePressButtonAsync} style={styles.button}></TouchableOpacity>
       <View style={styles.inputContainer}>
         <TextInput value={inputValue} onChangeText={(text) => setInputValue(text)} placeholder="Escreva uma tarefa" placeholderTextColor="#fff" style={styles.input} />
         <TouchableOpacity onPress={() => addTask()} style={styles.addButton}>
@@ -259,7 +315,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     textAlign: 'center'
   },
-  
+
   row: {
     display: 'flex',
     flexDirection: 'row',
@@ -312,6 +368,15 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     height: 40,
     padding: 5
+  },
+
+  button: {
+    backgroundColor: '#1c132e',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+    alignSelf: 'center',
+    marginTop: 20,
   },
 
   addButton: {
@@ -392,5 +457,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center'
+  },
+
+  shakeMessage: {
+    color: 'white',
+    fontSize: 20,
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
