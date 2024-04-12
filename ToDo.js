@@ -210,32 +210,6 @@ export default function ToDoScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    let isShakeDetected = false;
-    const subscription = DeviceMotion.addListener(({ acceleration }) => {
-      if (acceleration) {
-        const { z } = acceleration;
-        const threshold = 1.5;
-        // Verifica a sacudida no eixo z
-        if (Math.abs(z) > threshold) {
-          if (!isShakeDetected) {
-            isShakeDetected = true;
-            // Adiciona uma nova tarefa com o nome "teste"
-            addTask("teste");
-            setShakeDetected(true); // Define shakeDetected como true
-            setTimeout(() => setShakeDetected(false), 3000); // Reseta shakeDetected após 3 segundos
-          }
-        } else {
-          isShakeDetected = false;
-        }
-      }
-    });
-  
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
   const _handlePressButtonAsync = async () => {
     await WebBrowser.openBrowserAsync('https://catjal.github.io/site_integrantes/');
   };
