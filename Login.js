@@ -10,7 +10,7 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('');
 
     const handleLogin = () => {
-        if (username === 'Arthur' && password === 'Arthur/11') {
+        if (username === 'A' && password === 'A') {
             navigation.navigate('ToDo');
         } else {
             Alert.alert('Login inválido', 'Nome de usuário ou senha incorretos.');

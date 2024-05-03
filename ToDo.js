@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DeviceMotion } from 'expo-sensors';
-import { ScrollView, StyleSheet, Text, View, TextInput, TouchableOpacity, Platform, Image, Alert } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, TextInput, TouchableOpacity, Platform, Image } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
-
+import { Audio } from 'expo-av';
 
 export default function ToDoScreen() {
   const [tasks, setTasks] = useState([]);
@@ -15,36 +15,64 @@ export default function ToDoScreen() {
   const [taskDates, setTaskDates] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [currentTask, setCurrentTask] = useState({});
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [selectedDateTime, setSelectedDateTime] = useState(null);
+  const [dateTimePickerVisible, setDateTimePickerVisible] = useState(false);
   const [image, setImage] = useState(null);
   const [shakeDetected, setShakeDetected] = useState(false);
 
-  const showDatePicker = () => {
-    const dateToSelect = currentTask.key && taskDates[currentTask.key] ? new Date(taskDates[currentTask.key]) : selectedDate;
-    setSelectedDate(dateToSelect);
-    setDatePickerVisible(true);
+  const deleteTaskSoundObject = new Audio.Sound();
+  async function loadDeleteTaskSound() {
+    try {
+      await deleteTaskSoundObject.loadAsync(require('./assets/excluir_task.mp3')); 
+    } catch (error) {
+      console.error('Erro ao carregar o som:', error);
+    }
+  }
+  loadDeleteTaskSound();
+
+
+  const taskDueSoundObject = new Audio.Sound();
+  async function loadTaskDueSound() {
+    try {
+      await taskDueSoundObject.loadAsync(require('./assets/data_tarefa.mp3'));
+    } catch (error) {
+      console.error('Erro ao carregar o som:', error);
+    }
+  } loadTaskDueSound();
+
+
+  const soundObject = new Audio.Sound();
+  async function loadSound() {
+    try {
+      await soundObject.loadAsync(require('./assets/criar_tarefa.mp3'));
+    } catch (error) { }
+  } loadSound();
+
+  const showDateTimePicker = () => {
+    const dateToSelect = currentTask.key && taskDates[currentTask.key] ? new Date(taskDates[currentTask.key]) : selectedDateTime;
+    setSelectedDateTime(dateToSelect);
+    setDateTimePickerVisible(true);
   };
 
-  const setTaskDate = (taskKey, date) => {
+  const setTaskDateTime = (taskKey, dateTime) => {
     setTaskDates(prevDates => ({
       ...prevDates,
-      [taskKey]: date,
+      [taskKey]: dateTime,
     }));
   };
 
-  const hideDatePicker = () => {
-    setDatePickerVisible(false);
+  const hideDateTimePicker = () => {
+    setDateTimePickerVisible(false);
   };
 
-  const handleConfirm = (date) => {
-    hideDatePicker();
+  const handleDateTimeConfirm = (dateTime) => {
+    hideDateTimePicker();
     if (currentTask.key) {
-      setTaskDate(currentTask.key, date);
+      setTaskDateTime(currentTask.key, dateTime);
     }
   };
 
-  const addTask = () => {
+  const addTask = async () => {
     if (inputValue.trim() === '') return;
     if (isEditing) {
       let updatedTasks = tasks.map(task =>
@@ -56,8 +84,9 @@ export default function ToDoScreen() {
     } else {
       const newTaskKey = Date.now().toString();
       const newTask = { key: newTaskKey, text: inputValue, image: image };
-      setTaskDate(newTaskKey, selectedDate);
+      setTaskDateTime(newTaskKey, selectedDateTime);
       setTasks([...tasks, newTask]);
+      await soundObject.replayAsync();
       sendPushNotification(expoPushToken, newTask.text);
     }
     setInputValue('');
@@ -74,7 +103,7 @@ export default function ToDoScreen() {
     setIsEditing(false);
     setCurrentTask({});
     setInputValue('');
-    setSelectedDate(null);
+    setSelectedDateTime(null);
   }
 
   const deleteTask = (taskKey) => {
@@ -84,7 +113,9 @@ export default function ToDoScreen() {
       delete newDates[taskKey];
       return newDates;
     });
+    deleteTaskSoundObject.replayAsync(); 
   };
+  
 
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -210,6 +241,20 @@ export default function ToDoScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      tasks.forEach(task => {
+        const taskDate = taskDates[task.key];
+        if (taskDate && new Date(taskDate).getTime() <= Date.now()) {
+          taskDueSoundObject.replayAsync();
+        }
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [tasks, taskDates]);
+
+
   const _handlePressButtonAsync = async () => {
     await WebBrowser.openBrowserAsync('https://catjal.github.io/site_integrantes/');
   };
@@ -237,12 +282,19 @@ export default function ToDoScreen() {
               <View style={styles.row}>
                 <TouchableOpacity onPress={() => startEditTask(task)} style={styles.editButton}>
                   <Text style={styles.taskText}>{task.text}</Text>
-                  <TouchableOpacity onPress={showDatePicker} style={{ marginTop: 42 }}>
+                  <TouchableOpacity onPress={showDateTimePicker} style={styles.dateButton}>
                     <Text style={{ color: 'white', fontSize: 17 }}>
-                      {task.key && taskDates[task.key] ? new Date(taskDates[task.key]).toLocaleDateString() : 'No date selected'}
+                      {task.key && taskDates[task.key] ?
+                        <>
+                          <Text>{new Date(taskDates[task.key]).toLocaleDateString()}</Text>
+                          {"\n"}
+                          <Text>{new Date(taskDates[task.key]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                        </>
+                        : 'Sem data selecionada'}
                     </Text>
-                    <DateTimePickerModal isVisible={datePickerVisible} mode="date" onConfirm={handleConfirm} onCancel={hideDatePicker} />
+                    <DateTimePickerModal isVisible={dateTimePickerVisible} mode="datetime" onConfirm={handleDateTimeConfirm} onCancel={hideDateTimePicker} is24Hour/>
                   </TouchableOpacity>
+
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => deleteTask(task.key)} style={styles.deleteButton}>
                   <Text style={styles.deleteButtonText}>Excluir</Text>
@@ -275,6 +327,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c132e',
     paddingTop: 50,
     color: '#fff',
+  },
+
+  dateButton: {
+    height: 120,
+    width: 100,
+    marginTop: 77,
+    alignSelf: 'center',
   },
 
   modalContainer: {
